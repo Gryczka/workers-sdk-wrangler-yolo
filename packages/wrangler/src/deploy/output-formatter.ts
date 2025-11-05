@@ -49,20 +49,59 @@ export class YoloOutputFormatter {
 
 		if (this.verbose) {
 			// In verbose mode, the full deploy output is already shown
-			// Just add a success marker
+			// Just add a success marker with version ID
 			console.log(
 				chalk.green(`\n✓ Deployment #${this.deploymentCount} completed successfully in ${result.duration}ms`)
 			);
+			if (result.versionId) {
+				console.log(chalk.dim(`  Version: ${result.versionId}`));
+			}
 		} else {
-			// Condensed output
-			const url = result.workerUrl || result.targets?.[0]?.url || "N/A";
+			// Condensed output with both URLs
+			const mainUrl = result.workerUrl || result.targets?.[0]?.url || "N/A";
+
 			console.log(
 				chalk.green(`[${timestamp}] ✓ Deployment #${this.deploymentCount}`) +
-				chalk.gray(` (${result.duration}ms)`) +
-				chalk.dim(` → ${url}`)
+				chalk.gray(` (${result.duration}ms)`)
 			);
+
+			// Show main worker URL
+			console.log(chalk.dim(`  └─ Worker: ${mainUrl}`));
+
+			// Show version-specific preview URL if versionId is available
+			if (result.versionId) {
+				// Extract worker name from URL to construct version URL
+				const versionUrl = this.constructVersionUrl(mainUrl, result.versionId);
+				if (versionUrl) {
+					console.log(chalk.dim(`  └─ Preview: ${versionUrl}`));
+				}
+				console.log(chalk.dim(`  └─ Version: ${result.versionId}`));
+			}
 		}
 		console.log(); // Empty line for readability
+	}
+
+	/**
+	 * Constructs a version-specific preview URL from the main worker URL and version ID
+	 */
+	private constructVersionUrl(mainUrl: string, versionId: string): string | null {
+		try {
+			const url = new URL(mainUrl);
+			const hostname = url.hostname;
+
+			// Format: worker-name.account.workers.dev -> versionId.worker-name.workers.dev
+			const parts = hostname.split('.');
+			if (parts.length >= 3 && parts[parts.length - 2] === 'workers') {
+				// Insert version ID at the beginning
+				const workerName = parts[0];
+				const accountOrDomain = parts.slice(1).join('.');
+				return `https://${versionId}.${workerName}.${accountOrDomain}${url.pathname}`;
+			}
+
+			return null;
+		} catch {
+			return null;
+		}
 	}
 
 	formatDeployError(error: Error): void {
