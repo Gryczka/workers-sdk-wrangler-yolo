@@ -89,13 +89,14 @@ export class YoloOutputFormatter {
 			const url = new URL(mainUrl);
 			const hostname = url.hostname;
 
-			// Format: worker-name.account.workers.dev -> versionId.worker-name.workers.dev
+			// Format: worker-name.account.workers.dev -> shortId-worker-name.account.workers.dev
 			const parts = hostname.split('.');
 			if (parts.length >= 3 && parts[parts.length - 2] === 'workers') {
-				// Insert version ID at the beginning
+				// Get first segment of version ID (before first dash)
+				const shortId = versionId.split('-')[0];
 				const workerName = parts[0];
 				const accountOrDomain = parts.slice(1).join('.');
-				return `https://${versionId}.${workerName}.${accountOrDomain}${url.pathname}`;
+				return `https://${shortId}-${workerName}.${accountOrDomain}${url.pathname}`;
 			}
 
 			return null;
