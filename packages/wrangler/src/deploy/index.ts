@@ -27,6 +27,7 @@ import { getRules } from "../utils/getRules";
 import { getScriptName } from "../utils/getScriptName";
 import { useServiceEnvironments } from "../utils/useServiceEnvironments";
 import deploy from "./deploy";
+import { startYoloMode } from "./watch";
 
 export const deployCommand = createCommand({
 	metadata: {
@@ -248,6 +249,17 @@ export const deployCommand = createCommand({
 			type: "boolean",
 			default: false,
 		},
+		yolo: {
+			describe:
+				"Watch for file changes and automatically redeploy (for development only)",
+			type: "boolean",
+			default: false,
+		},
+		verbose: {
+			describe: "Show verbose output during deployments",
+			type: "boolean",
+			default: false,
+		},
 	},
 	behaviour: {
 		useConfigRedirectIfAvailable: true,
@@ -434,6 +446,84 @@ export const deployCommand = createCommand({
 				sendMetrics: config.send_metrics,
 			}
 		);
+
+		// YOLO Mode: Watch for changes and redeploy automatically
+		if (args.yolo) {
+			// Warn if deploying to production environment
+			if (args.env === "production") {
+				logger.warn(
+					chalk.yellow(
+						"⚠️  Warning: You are using YOLO mode with a production environment.\n" +
+						"   This will automatically deploy changes to production on every file save.\n" +
+						"   Consider using a development environment instead.\n"
+					)
+				);
+			}
+
+			// Check if --yolo was passed twice to skip confirmation
+			const yoloCount = process.argv.filter((arg) => arg === "--yolo").length;
+			const skipConfirmation = yoloCount >= 2;
+
+			if (!skipConfirmation && !isNonInteractiveOrCI()) {
+				const shouldContinue = await confirm(
+					"YOLO mode will watch for file changes and automatically redeploy.\n" +
+					"This is intended for development only. Continue?",
+					{ defaultValue: true }
+				);
+
+				if (!shouldContinue) {
+					logger.log("YOLO mode cancelled.");
+					return;
+				}
+			}
+
+			// Enter watch mode
+			await startYoloMode(
+				{
+					config,
+					accountId,
+					name,
+					rules: getRules(config),
+					entry,
+					env: args.env,
+					compatibilityDate: args.latest
+						? formatCompatibilityDate(new Date())
+						: args.compatibilityDate,
+					compatibilityFlags: args.compatibilityFlags,
+					vars: cliVars,
+					defines: cliDefines,
+					alias: cliAlias,
+					triggers: args.triggers,
+					jsxFactory: args.jsxFactory,
+					jsxFragment: args.jsxFragment,
+					tsconfig: args.tsconfig,
+					routes: args.routes,
+					domains: args.domains,
+					assetsOptions,
+					legacyAssetPaths: siteAssetPaths,
+					useServiceEnvironments: useServiceEnvironments(config),
+					minify: args.minify,
+					isWorkersSite: Boolean(args.site || config.site),
+					outDir: args.outdir,
+					outFile: args.outfile,
+					dryRun: args.dryRun,
+					metafile: args.metafile,
+					noBundle: !(args.bundle ?? !config.no_bundle),
+					keepVars: args.keepVars,
+					logpush: args.logpush,
+					uploadSourceMaps: args.uploadSourceMaps,
+					oldAssetTtl: args.oldAssetTtl,
+					projectRoot,
+					dispatchNamespace: args.dispatchNamespace,
+					experimentalAutoCreate: args.experimentalAutoCreate,
+					containersRollout: args.containersRollout,
+					strict: args.strict,
+				},
+				{
+					verbose: args.verbose,
+				}
+			);
+		}
 	},
 });
 
